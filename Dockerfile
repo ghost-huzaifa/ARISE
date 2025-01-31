@@ -4,7 +4,8 @@ FROM node:20.13.1-alpine3.20
 RUN addgroup app && adduser -S -G app app
 USER app
 WORKDIR /app
-
+RUN mkdir data
+RUN cd data
 # # Will reinstall packages only if package.json is changed
 COPY package*.json .
 RUN npm install
@@ -42,5 +43,11 @@ ENTRYPOINT ["npm", "start"]
 
 
 # docker build -t <name> .
+
 # docker run -it <image> sh
+# docker run —p 3000:3000 <image> # to publish a port HOST:CONTAINER
+
 # docker start <containerID>
+
+# docker exec <containerID> <cmd>
+# docker exec -it <containerID> sh # to start a shell
