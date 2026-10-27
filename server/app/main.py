@@ -1,21 +1,37 @@
-from keybert import KeyBERT
+import logging
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from keybert import KeyBERT
 from .agent import ResearchAgent
-import logging
 
-app = FastAPI(title="Research Paper API")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="ARISE Research Paper API",
+    description="Autonomous Research, Inference, Synthesis, and Exploration engine with Neural Cross-Encoder Re-Ranking"
+)
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global cached model instances
+kw_model = None
+
+def get_kw_model():
+    global kw_model
+    if kw_model is None:
+        logger.info("Initializing cached KeyBERT keyword extractor...")
+        kw_model = KeyBERT()
+    return kw_model
 
 class SearchRequest(BaseModel):
     prompt: str
@@ -28,27 +44,44 @@ class PaperResponse(BaseModel):
     abstract: str
     published: str
     link: str
+    relevance_score: Optional[int] = None
+    source: Optional[str] = "arXiv (Preprint)"
+    citations: Optional[int] = None
 
 class SearchResponse(BaseModel):
     papers: Optional[List[PaperResponse]] = None
+    total_found: Optional[int] = None
     error: Optional[str] = None
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "ARISE Engine 2.0"}
 
 @app.post("/search", response_model=SearchResponse)
 async def search_papers(request: SearchRequest):
     try:
-        logging.info(request.prompt)
+        logger.info(f"Received search query: '{request.prompt}' (max_results: {request.max_results})")
         agent = ResearchAgent()
 
-        doc = request.prompt
-        kw_model = KeyBERT()
-        keywords = [kw[0] for kw in kw_model.extract_keywords(doc)]
-        print(keywords)
-        task = agent.search_papers(keywords, request.max_results)
+        # Extract semantic keywords for first-stage lexical filtering
+        kw_extractor = get_kw_model()
+        extracted = kw_extractor.extract_keywords(request.prompt)
+        keywords = [kw[0] for kw in extracted] if extracted else request.prompt.split()[:5]
+        logger.info(f"Extracted candidate filter keywords: {keywords}")
+
+        # Execute federated search + Cross-Encoder re-ranking
+        task = agent.search_papers(
+            keywords=keywords,
+            max_results=request.max_results or 12,
+            prompt=request.prompt
+        )
         
         if task.status.value == "completed":
-            return SearchResponse(papers=task.result)
+            results = task.result or []
+            return SearchResponse(papers=results, total_found=len(results))
         else:
-            raise HTTPException(status_code=500, detail=task.result)
+            raise HTTPException(status_code=500, detail=str(task.result))
             
     except Exception as e:
+        logger.error(f"Search endpoint error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
