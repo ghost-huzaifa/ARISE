@@ -1,0 +1,13 @@
+version: '3.5'
+services:
+  frontend:
+    container_name: frontend
+    hostname: frontend
+    image: nginx:latest
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    networks:
+      - net-db

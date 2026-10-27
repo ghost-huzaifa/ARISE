@@ -5,10 +5,14 @@ export interface Paper {
   abstract: string;
   published: string;
   link: string;
+  relevance_score?: number;
+  source?: string;
+  citations?: number | null;
 }
 
 export interface SearchResponse {
   papers?: Paper[];
+  total_found?: number;
   error?: string;
 }
 

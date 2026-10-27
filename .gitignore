@@ -36,3 +36,9 @@ yarn-error.log*
 next-env.d.ts
 /.bolt/
 node_modules
+
+# Python virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
